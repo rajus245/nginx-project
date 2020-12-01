@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ormaeapp
+  labels:
+    app: frontendapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontendapp
+  template:
+    metadata:
+      name: ormaeapp
+      labels:
+        app: frontendapp
+    spec:
+      volumes:
+        - name: host-volume
+          persistentVolumeClaim:
+            claimName: my-pvc
+      containers:
+        - image: ${REPOSITORY_TAG}
+          name: ormaeapp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+             - name: host-volume
+               mountPath: /usr/local/tomcat/logs
+
+---
+#service 
+
+apiVersion: v1
+kind: Service
+metadata: 
+  name: ormae-service 
+spec:
+  ports:
+    - port: 8080  
+      targetPort: 8080
+      nodePort: 30004
+  selector:
+    app: frontendapp
+  type: NodePort
+
+---
+# persistent volume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-pv
+  labels:
+    type: local
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 2Gi
+  storageClassName: manual
+  hostPath:
+    path: /log-stats
+  
+---
+# persistent volume claim
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc 
+  labels:
+    app: my-pvc 
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+
+# Autoscaling
+
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-autoscale 
+  labels:
+    type: autoscale
+spec:
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  scaleTargetRef: 
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ormaeapp
